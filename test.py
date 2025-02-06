@@ -25,6 +25,6 @@ df = (
 (
     df
     .write_stream()
-    .format("console")
-    .save("y")
+    .format("csv")
+    .save("out")
 )

@@ -2,6 +2,7 @@ from polar_streams.sink import SinkFactory
 from abc import ABC, abstractmethod
 import polars as pl
 from polars.expr.expr import Expr
+from typing import Generator
 
 COL_TYPE = Expr | str
 
@@ -47,14 +48,14 @@ class GroupedDataFrame(DataFrame):
         self._agg_cols = cols
         return DataFrame(self)
 
-    def process(self):
+    def process(self) -> Generator[pl.LazyFrame, None, None]:
         for pl_df in self._source.process():
             if self._state_pl_df is None:
                 new_state = pl_df
                 self._state_pl_df = new_state
             else:
                 new_state = pl.concat([pl_df, self._state_pl_df.lazy()])
-            yield new_state.group_by(self._group_cols).agg(self._agg_cols)
+            yield new_state.group_by(self._group_cols).agg(self._agg_cols).lazy()
 
 
 class Operator(ABC):
