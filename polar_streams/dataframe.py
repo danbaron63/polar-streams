@@ -32,6 +32,30 @@ class DataFrame:
         self._operation = Select(list(cols))
         return DataFrame(self)
 
+    def group_by(self, *cols):
+        return GroupedDataFrame(self, list(cols))
+
+
+class GroupedDataFrame(DataFrame):
+    def __init__(self, source, group_cols: list[COL_TYPE]):
+        super().__init__(source)
+        self._agg_cols = None
+        self._group_cols = group_cols
+        self._state_pl_df = None
+
+    def agg(self, *cols: list[COL_TYPE]):
+        self._agg_cols = cols
+        return DataFrame(self)
+
+    def process(self):
+        for pl_df in self._source.process():
+            if self._state_pl_df is None:
+                new_state = pl_df
+                self._state_pl_df = new_state
+            else:
+                new_state = pl.concat([pl_df, self._state_pl_df.lazy()])
+            yield new_state.group_by(self._group_cols).agg(self._agg_cols)
+
 
 class Operator(ABC):
     @abstractmethod

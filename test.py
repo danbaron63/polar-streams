@@ -16,11 +16,8 @@ df = (
         (pl.col("salary") * 1.2).alias("promotion"),
         pl.lit("COLUMN").alias("test")
     )
-    .select(
-        "id",
-        pl.col("promotion").alias("salary"),
-        "name",
-    )
+    .group_by("id")
+    .agg(pl.sum("salary"))
 )
 
 (
