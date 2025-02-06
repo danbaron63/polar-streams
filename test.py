@@ -2,11 +2,13 @@ from polar_streams import polars
 import polars as pl
 
 
+
+
 df = (
     polars
     .read_stream()
     .option("test","test")
-    .format("file")
+    .format("csv")
     .load("data")
 )
 

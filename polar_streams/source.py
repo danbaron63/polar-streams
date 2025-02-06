@@ -5,6 +5,7 @@ from multiprocessing import Queue
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, EVENT_TYPE_CREATED
 from watchdog.observers import Observer
 from pathlib import Path
+from typing import Callable
 
 
 class Source(ABC):
@@ -21,7 +22,23 @@ class Source(ABC):
 
 
 class FileSource(Source):
-    _path = None
+    def __init__(self, options: dict[str, str], format: str):
+        super().__init__(options)
+        self._path = None
+        self._options = options
+        self._format = format
+        match format:
+            case "csv":
+                self._read_func = pl.scan_csv
+            case "parquet":
+                self._read_func = pl.scan_parquet
+            case "ndjson":
+                self._read_func = pl.scan_ndjson
+            case "json":
+                self._read_func = pl.read_json
+
+    def _read_path(self, path: str) -> pl.LazyFrame:
+        return self._read_func(path).lazy()
 
     def load(self, path: str) -> DataFrame:
         if not path:
@@ -42,7 +59,7 @@ class FileSource(Source):
     def process(self):
         # batch process all files and then listen for new ones
         source_path = Path(self._path)
-        yield pl.concat(pl.collect_all([pl.scan_csv(p) for p in source_path.iterdir() if not p.is_dir()]))
+        yield pl.concat(pl.collect_all([self._read_path(p) for p in source_path.iterdir() if not p.is_dir()]))
 
         # search for new files and pass them along
         # using watchdog.
@@ -55,7 +72,8 @@ class FileSource(Source):
         try:
             while True:
                 event = q.get()
-                pl_df = pl.scan_csv(event.src_path)
+                pl_df = self._read_path(event.src_path)
+                # TODO: schema check
                 yield pl_df
         finally:
             observer.stop()
@@ -77,7 +95,7 @@ class SourceFactory:
 
     def load(self, path: None | str = None) -> DataFrame:
         match self._format:
-            case "file":
-                return FileSource(self._options).load(path)
+            case "csv" | "parquet" | "json" | "ndjson":
+                return FileSource(self._options, self._format).load(path)
             case _:
-                raise NotImplementedError(f"{self._format} is not implemented")
+                raise ValueError(f"{self._format} is not supported")
