@@ -1,4 +1,5 @@
 from polar_streams import polars
+import polars as pl
 
 
 df = (
@@ -9,7 +10,18 @@ df = (
     .load("data")
 )
 
-print(df.__dict__)
+df = (
+    df
+    .with_columns(
+        (pl.col("salary") * 1.2).alias("promotion"),
+        pl.lit("COLUMN").alias("test")
+    )
+    .select(
+        "id",
+        pl.col("promotion").alias("salary"),
+        "name",
+    )
+)
 
 (
     df
