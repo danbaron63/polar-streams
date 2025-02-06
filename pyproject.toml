@@ -1,0 +1,13 @@
+[project]
+name = "polar-streams"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+packages = [
+    "polar_streams",
+]
+dependencies = [
+    "polars>=1.21.0",
+    "watchdog>=6.0.0",
+]
