@@ -115,7 +115,7 @@ class DropDuplicates(Operator):
 
         # filter out records based on state
         pl_df_deduplicated = pl_df_unique.join(
-            other=self._state_store.get_state(),
+            other=state,
             on=self._key,
             how="anti",
         )

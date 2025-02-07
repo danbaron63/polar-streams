@@ -1,10 +1,17 @@
 import polars as pl
 import sqlite3
+from pathlib import Path
+
 
 class StateStore:
-    _uri = "sqlite:///out/state.db"
+    def __init__(self, state_dir: str = "state"):
+        self._state_dir = Path(state_dir)
+        self._state_dir.mkdir(exist_ok=True, parents=True)
+        self._path = self._state_dir / "state.db"
+        self._uri = f"sqlite:///{state_dir}/state.db"
+        self._con = sqlite3.connect(self._path)
 
-    def write_state(self, pl_df: pl.DataFrame):
+    def write_state(self, pl_df: pl.LazyFrame):
         pl_df.collect().write_database(
             table_name="state",
             connection=self._uri,
@@ -13,8 +20,7 @@ class StateStore:
         )
 
     def state_exists(self) -> bool:
-        con = sqlite3.connect("out/state.db")
-        cur = con.cursor()
+        cur = self._con.cursor()
         res = cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='state';")
         return bool(res.fetchone())
 
