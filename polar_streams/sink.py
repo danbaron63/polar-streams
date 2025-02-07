@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from time import sleep
 import polars as pl
 from uuid import uuid1
 from pathlib import Path
+from multiprocessing import Process
 
 
 class Sink(ABC):
@@ -11,9 +11,14 @@ class Sink(ABC):
         self._df = df
         self._path = None
 
-    def save(self) :
-        for pl_df in self._df.process():
-            self.write(pl_df)
+    def save(self) -> "QueryManager":
+        def pull_loop():
+            for pl_df in self._df.process():
+                self.write(pl_df)
+
+        p = Process(target=pull_loop)
+        p.start()
+        return QueryManager(p)
 
     @abstractmethod
     def write(self, pl_df):
@@ -60,7 +65,7 @@ class SinkFactory:
         self._format = fmt
         return self
 
-    def save(self, path: None | str = None):
+    def save(self, path: None | str = None) -> "QueryManager":
         match self._format:
             case "console":
                 sink = ConsoleSink(self._options, self._df)
@@ -68,4 +73,13 @@ class SinkFactory:
                 sink = FileSink(self._options, self._df, self._format, Path(path))
             case _:
                 raise ValueError(f"{self._format} is not supported")
-        sink.save()
+        return sink.save()
+
+
+class QueryManager:
+    def __init__(self, query_process: Process):
+        self._query_process = query_process
+
+    def stop(self):
+        self._query_process.terminate()
+        self._query_process.join()

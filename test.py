@@ -1,5 +1,6 @@
 from polar_streams import polars
 import polars as pl
+import time
 
 
 df = (
@@ -23,10 +24,14 @@ df = (
     .agg(pl.sum("salary"))
 )
 
-(
+query = (
     df
     .write_stream()
     # .format("csv")
     # .save("out")
     .format("console").save()
 )
+
+time.sleep(2)
+
+query.stop()
