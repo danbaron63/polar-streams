@@ -1,4 +1,5 @@
 from polar_streams.sink import SinkFactory
+from polar_streams.statestore import StateStore
 from abc import ABC, abstractmethod
 import polars as pl
 from polars.expr.expr import Expr
@@ -99,29 +100,33 @@ class Filter(Operator):
 class DropDuplicates(Operator):
     def __init__(self, key: list[COL_TYPE]):
         self._key = key
-        self._state = None  # TODO: implement persisted state
+        # self._state = None  # TODO: implement persisted state
+        self._state_store = StateStore()
 
     def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
-        if self._state is None:
+        if not self._state_store.state_exists():
             # initialise state
-            self._state = pl_df.select(*self._key).unique()
+            self._state_store.write_state(pl_df.select(*self._key).unique())
             return pl_df.unique(subset=self._key)
 
         # deduplicate incoming batch
         pl_df_unique = pl_df.unique(subset=self._key)
+        state = self._state_store.get_state()
 
         # filter out records based on state
         pl_df_deduplicated = pl_df_unique.join(
-            other=self._state,
+            other=self._state_store.get_state(),
             on=self._key,
             how="anti",
         )
 
         # update state
-        self._state = pl.concat_all([
-            self._state,
+        new_state = pl.concat([
+            state,
             pl_df_unique.select(*self._key)
         ]).unique(subset=self._key)
+
+        self._state_store.write_state(new_state)
 
         # return deduplicated dataframe
         return pl_df_deduplicated

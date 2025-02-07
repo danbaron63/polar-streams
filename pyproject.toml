@@ -8,6 +8,8 @@ packages = [
     "polar_streams",
 ]
 dependencies = [
+    "adbc-driver-sqlite>=1.4.0",
     "polars>=1.21.0",
+    "pyarrow>=19.0.0",
     "watchdog>=6.0.0",
 ]
