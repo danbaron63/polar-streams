@@ -14,6 +14,7 @@ df = (
 
 df = (
     df
+    .filter((pl.col("id") == 1) | (pl.col("id") == 2))
     .with_columns(
         (pl.col("salary") * 1.2).alias("promotion"),
         pl.lit("COLUMN").alias("test")
@@ -25,6 +26,7 @@ df = (
 (
     df
     .write_stream()
-    .format("csv")
-    .save("out")
+    # .format("csv")
+    # .save("out")
+    .format("console").save()
 )

@@ -36,6 +36,10 @@ class DataFrame:
     def group_by(self, *cols):
         return GroupedDataFrame(self, list(cols))
 
+    def filter(self, predicate: Expr | bool):
+        self._operation = Filter(predicate)
+        return DataFrame(self)
+
 
 class GroupedDataFrame(DataFrame):
     def __init__(self, source, group_cols: list[COL_TYPE]):
@@ -78,3 +82,11 @@ class Select(Operator):
 
     def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
         return pl_df.select(self._cols)
+
+
+class Filter(Operator):
+    def __init__(self, predicate: Expr | bool):
+        self._predicate = predicate
+
+    def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
+        return pl_df.filter(self._predicate)
