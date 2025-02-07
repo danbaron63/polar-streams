@@ -40,6 +40,10 @@ class DataFrame:
         self._operation = Filter(predicate)
         return DataFrame(self)
 
+    def drop_duplicates(self, *key):
+        self._operation = DropDuplicates(list(key))
+        return DataFrame(self)
+
 
 class GroupedDataFrame(DataFrame):
     def __init__(self, source, group_cols: list[COL_TYPE]):
@@ -90,3 +94,34 @@ class Filter(Operator):
 
     def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
         return pl_df.filter(self._predicate)
+
+
+class DropDuplicates(Operator):
+    def __init__(self, key: list[COL_TYPE]):
+        self._key = key
+        self._state = None  # TODO: implement persisted state
+
+    def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
+        if self._state is None:
+            # initialise state
+            self._state = pl_df.select(*self._key).unique()
+            return pl_df.unique(subset=self._key)
+
+        # deduplicate incoming batch
+        pl_df_unique = pl_df.unique(subset=self._key)
+
+        # filter out records based on state
+        pl_df_deduplicated = pl_df_unique.join(
+            other=self._state,
+            on=self._key,
+            how="anti",
+        )
+
+        # update state
+        self._state = pl.concat_all([
+            self._state,
+            pl_df_unique.select(*self._key)
+        ]).unique(subset=self._key)
+
+        # return deduplicated dataframe
+        return pl_df_deduplicated

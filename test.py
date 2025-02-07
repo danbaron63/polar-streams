@@ -2,8 +2,6 @@ from polar_streams import polars
 import polars as pl
 
 
-
-
 df = (
     polars
     .read_stream()
@@ -15,6 +13,7 @@ df = (
 df = (
     df
     .filter((pl.col("id") == 1) | (pl.col("id") == 2))
+    .drop_duplicates(pl.col("id"))
     .with_columns(
         (pl.col("salary") * 1.2).alias("promotion"),
         pl.lit("COLUMN").alias("test")
