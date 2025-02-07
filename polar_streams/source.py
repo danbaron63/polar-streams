@@ -59,7 +59,13 @@ class FileSource(Source):
     def process(self):
         # batch process all files and then listen for new ones
         source_path = Path(self._path)
-        yield pl.concat(pl.collect_all([self._read_path(p) for p in source_path.iterdir() if not p.is_dir()]))
+        run_initial_batch = self._options.get("run_initial_batch", "true") == "true"
+        source_batches = (self._read_path(p) for p in source_path.iterdir() if not p.is_dir())
+        if run_initial_batch:
+            yield pl.concat(pl.collect_all(list(source_batches)))
+        else:
+            for pl_df in source_batches:
+                yield pl_df
 
         # search for new files and pass them along
         # using watchdog.
