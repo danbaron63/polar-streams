@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-import polars as pl
 from uuid import uuid1
 from pathlib import Path
 from multiprocessing import Process
-from polar_streams.config import OutputMode, Config
+from polar_streams.model import OutputMode, Config, MicroBatch
+from polar_streams.statestore import StateStore
 
 
 class Sink(ABC):
@@ -12,24 +12,28 @@ class Sink(ABC):
         self._df = df
         self._path = None
         self._df.set_config(self._config)
+        self._wal = StateStore("state")
+
 
     def save(self) -> "QueryManager":
         def pull_loop():
-            for pl_df in self._df.process():
-                self.write(pl_df)
+            for microbatch in self._df.process():
+                self.write(microbatch)
 
         p = Process(target=pull_loop)
         p.start()
         return QueryManager(p)
 
     @abstractmethod
-    def write(self, pl_df):
+    def write(self, microbatch: MicroBatch):
         raise NotImplementedError
 
 
 class ConsoleSink(Sink):
-    def write(self, pl_df):
-        print(pl_df.lazy().collect())
+    def write(self, microbatch: MicroBatch):
+        print(microbatch.pl_df.lazy().collect())
+        for wal_id in microbatch.metadata.wal_ids:
+            self._wal.wal_commit("", wal_id)
 
 
 class FileSink(Sink):
@@ -39,16 +43,16 @@ class FileSink(Sink):
         self._path.mkdir(parents=True, exist_ok=True)
         self._format = fmt
 
-    def write(self, pl_df: pl.LazyFrame):
+    def write(self, microbatch: MicroBatch):
         # TODO: Consider using a monotonic counter if ordering of files is important
         path = self._path / f"{uuid1()}.{self._format}"
         match self._format:
             case "csv":
-                pl_df.sink_csv(path)
+                microbatch.pl_df.sink_csv(path)
             case "parquet":
-                pl_df.sink_parquet(path)
+                microbatch.pl_df.sink_parquet(path)
             case "json":
-                pl_df.sink_ndjson(path)
+                microbatch.pl_df.sink_ndjson(path)
             case _:
                 raise ValueError(f"{self._format} is not supported")
 

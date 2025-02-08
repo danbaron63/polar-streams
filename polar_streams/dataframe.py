@@ -1,10 +1,12 @@
 from polar_streams.sink import SinkFactory
 from polar_streams.statestore import StateStore
-from polar_streams.config import Config
+from polar_streams.model import Config
 from abc import ABC, abstractmethod
 import polars as pl
 from polars.expr.expr import Expr
 from typing import Generator
+from polar_streams.model import MicroBatch
+
 
 COL_TYPE = Expr | str
 
@@ -18,12 +20,12 @@ class DataFrame:
     def write_stream(self) -> SinkFactory:
         return SinkFactory(self)
 
-    def process(self):
-        for pl_df in self._source.process():
+    def process(self) -> Generator[MicroBatch, None, None]:
+        for microbatch in self._source.process():
             if self._operation:
-                yield self._operation.process(pl_df)
+                yield self._operation.process(microbatch)
             else:
-                yield pl_df
+                yield microbatch
 
     def set_config(self, config: Config):
         self._config = config
@@ -63,24 +65,24 @@ class GroupedDataFrame(DataFrame):
         self._agg_cols = cols
         return DataFrame(self)
 
-    def process(self) -> Generator[pl.LazyFrame, None, None]:
-        for pl_df in self._source.process():
+    def process(self) -> Generator[MicroBatch, None, None]:
+        for microbatch in self._source.process():
             # Fetch state if exists, otherwise initialise with current batch
             if not self._state_store.state_exists("group_by"):
-                new_state = pl_df.select(*self._group_cols, *self._agg_cols)
+                new_state = microbatch.pl_df.select(*self._group_cols, *self._agg_cols)
             else:
-                new_state = pl.concat([pl_df.select(*self._group_cols, *self._agg_cols), self._state_store.get_state("group_by")])
+                new_state = pl.concat([microbatch.pl_df.select(*self._group_cols, *self._agg_cols), self._state_store.get_state("group_by")])
 
             # Update state
             self._state_store.write_state(new_state, "group_by")
 
             # Yield aggregated result
-            yield new_state.group_by(self._group_cols).agg(self._agg_cols).lazy()
+            yield microbatch.new(new_state.group_by(self._group_cols).agg(self._agg_cols).lazy())
 
 
 class Operator(ABC):
     @abstractmethod
-    def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
+    def process(self, microbatch: MicroBatch) -> MicroBatch:
         raise NotImplementedError
 
 
@@ -88,24 +90,24 @@ class AddColumns(Operator):
     def __init__(self, cols: list[COL_TYPE]):
         self._cols = cols
 
-    def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
-        return pl_df.with_columns(self._cols)
+    def process(self, microbatch: MicroBatch) -> MicroBatch:
+        return microbatch.new(microbatch.pl_df.with_columns(self._cols))
 
 
 class Select(Operator):
     def __init__(self, cols: list[COL_TYPE]):
         self._cols = cols
 
-    def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
-        return pl_df.select(self._cols)
+    def process(self, microbatch: MicroBatch) -> MicroBatch:
+        return microbatch.new(microbatch.pl_df.select(self._cols))
 
 
 class Filter(Operator):
     def __init__(self, predicate: Expr | bool):
         self._predicate = predicate
 
-    def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
-        return pl_df.filter(self._predicate)
+    def process(self, microbatch: MicroBatch) -> MicroBatch:
+        return microbatch.new(microbatch.pl_df.filter(self._predicate))
 
 
 class DropDuplicates(Operator):
@@ -113,14 +115,14 @@ class DropDuplicates(Operator):
         self._key = key
         self._state_store = StateStore()
 
-    def process(self, pl_df: pl.LazyFrame) -> pl.LazyFrame:
+    def process(self, microbatch: MicroBatch) -> MicroBatch:
         if not self._state_store.state_exists("drop_duplicates"):
             # initialise state
-            self._state_store.write_state(pl_df.select(*self._key).unique(), "drop_duplicates")
-            return pl_df.unique(subset=self._key)
+            self._state_store.write_state(microbatch.pl_df.select(*self._key).unique(), "drop_duplicates")
+            return microbatch.new(microbatch.pl_df.unique(subset=self._key))
 
         # deduplicate incoming batch
-        pl_df_unique = pl_df.unique(subset=self._key)
+        pl_df_unique = microbatch.pl_df.unique(subset=self._key)
         state = self._state_store.get_state("drop_duplicates")
 
         # filter out records based on state
@@ -139,4 +141,4 @@ class DropDuplicates(Operator):
         self._state_store.write_state(new_state, "drop_duplicates")
 
         # return deduplicated dataframe
-        return pl_df_deduplicated
+        return microbatch.new(pl_df=pl_df_deduplicated)

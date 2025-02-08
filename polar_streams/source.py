@@ -1,17 +1,21 @@
 from abc import ABC, abstractmethod
-from polar_streams.config import Config, OutputMode
+from polar_streams.model import Config, OutputMode, Metadata, MicroBatch
 from polar_streams.dataframe import DataFrame
+from polar_streams.statestore import StateStore
 import polars as pl
 from multiprocessing import Queue
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, EVENT_TYPE_CREATED
 from watchdog.observers import Observer
 from pathlib import Path
+from typing import Generator
+from datetime import datetime
 
 
 class Source(ABC):
     def __init__(self, options: dict[str, str]):
         self._options = options
         self._config: Config | None = None
+        self._wal = StateStore("state")
 
     def set_config(self, config: Config):
         self._config = config
@@ -48,7 +52,7 @@ class FileSource(Source):
         if not path:
             raise ValueError("Expected a path when calling load()")
 
-        self._path = path
+        self._path = Path(path)
         df = DataFrame(self)
         return df
 
@@ -60,23 +64,29 @@ class FileSource(Source):
             if event.event_type == EVENT_TYPE_CREATED:
                 self._q.put(event)
 
-    def process(self):
+    def process(self) -> Generator[MicroBatch, None, None]:
         # batch process all files and then listen for new ones
-        source_path = Path(self._path)
         run_initial_batch = self._options.get("run_initial_batch", "true") == "true"
-        source_batches = (self._read_path(p) for p in source_path.iterdir() if not p.is_dir())
+        source_files = [p for p in self._path.iterdir() if not p.is_dir()]
+        wal_ids = (self._wal.wal_append(p) for p in source_files)
+        source_batches = (self._read_path(p) for p in source_files)
         if run_initial_batch:
-            yield pl.concat(pl.collect_all(list(source_batches)))
+            yield MicroBatch(
+                pl_df=pl.concat(pl.collect_all(list(source_batches))).lazy(),
+                metadata=Metadata(source_files=source_files, wal_ids=list(wal_ids), start_time=datetime.now())
+            )
         else:
-            for pl_df in source_batches:
-                yield pl_df
+            for pl_df, source_file, wal_id in zip(source_batches, source_files, wal_ids):
+                yield MicroBatch(
+                    pl_df=pl_df,
+                    metadata=Metadata(source_files=[source_file], wal_ids=[wal_id], start_time=datetime.now())
+                )
 
         # For complete output mode don't create source thread
         if self._config.output_mode == OutputMode.COMPLETE:
             return
 
-        # search for new files and pass them along
-        # using watchdog.
+        # search for new files and pass them along using watchdog.
         q = Queue()
         event_handler = self.MyEventHandler(q)
         observer = Observer()
@@ -86,9 +96,13 @@ class FileSource(Source):
         try:
             while True:
                 event = q.get()
+                wal_id = self._wal.wal_append(event.src_path)
                 pl_df = self._read_path(event.src_path)
                 # TODO: schema check
-                yield pl_df
+                yield MicroBatch(
+                    pl_df=pl_df,
+                    metadata=Metadata(source_files=[event.src_path], wal_ids=[wal_id], start_time=datetime.now())
+                )
         finally:
             observer.stop()
             observer.join()
