@@ -11,22 +11,22 @@ class StateStore:
         self._uri = f"sqlite:///{state_dir}/state.db"
         self._con = sqlite3.connect(self._path)
 
-    def write_state(self, pl_df: pl.LazyFrame):
+    def write_state(self, pl_df: pl.LazyFrame, table_name: str):
         pl_df.collect().write_database(
-            table_name="state",
+            table_name=table_name,
             connection=self._uri,
             engine="adbc",
             if_table_exists="replace",
         )
 
-    def state_exists(self) -> bool:
+    def state_exists(self, table_name: str) -> bool:
         cur = self._con.cursor()
-        res = cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='state';")
+        res = cur.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
         return bool(res.fetchone())
 
-    def get_state(self) -> pl.LazyFrame:
+    def get_state(self, table_name: str) -> pl.LazyFrame:
         return pl.read_database_uri(
-            query="SELECT * FROM state",
+            query=f"SELECT * FROM {table_name}",
             uri=self._uri,
             engine="adbc"
         ).lazy()

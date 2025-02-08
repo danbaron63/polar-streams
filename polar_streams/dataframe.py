@@ -51,7 +51,7 @@ class GroupedDataFrame(DataFrame):
         super().__init__(source)
         self._agg_cols = None
         self._group_cols = group_cols
-        self._state_pl_df = None
+        self._state_store = StateStore("state")
 
     def agg(self, *cols: list[COL_TYPE]):
         self._agg_cols = cols
@@ -59,11 +59,16 @@ class GroupedDataFrame(DataFrame):
 
     def process(self) -> Generator[pl.LazyFrame, None, None]:
         for pl_df in self._source.process():
-            if self._state_pl_df is None:
-                new_state = pl_df
-                self._state_pl_df = new_state
+            # Fetch state if exists, otherwise initialise with current batch
+            if not self._state_store.state_exists("group_by"):
+                new_state = pl_df.select(*self._group_cols, *self._agg_cols)
             else:
-                new_state = pl.concat([pl_df, self._state_pl_df.lazy()])
+                new_state = pl.concat([pl_df.select(*self._group_cols, *self._agg_cols), self._state_store.get_state("group_by")])
+
+            # Update state
+            self._state_store.write_state(new_state, "group_by")
+
+            # Yield aggregated result
             yield new_state.group_by(self._group_cols).agg(self._agg_cols).lazy()
 
 
@@ -100,18 +105,17 @@ class Filter(Operator):
 class DropDuplicates(Operator):
     def __init__(self, key: list[COL_TYPE]):
         self._key = key
-        # self._state = None  # TODO: implement persisted state
         self._state_store = StateStore()
 
-    def process(self, pl_df: pl.DataFrame) -> pl.DataFrame:
-        if not self._state_store.state_exists():
+    def process(self, pl_df: pl.LazyFrame) -> pl.LazyFrame:
+        if not self._state_store.state_exists("drop_duplicates"):
             # initialise state
-            self._state_store.write_state(pl_df.select(*self._key).unique())
+            self._state_store.write_state(pl_df.select(*self._key).unique(), "drop_duplicates")
             return pl_df.unique(subset=self._key)
 
         # deduplicate incoming batch
         pl_df_unique = pl_df.unique(subset=self._key)
-        state = self._state_store.get_state()
+        state = self._state_store.get_state("drop_duplicates")
 
         # filter out records based on state
         pl_df_deduplicated = pl_df_unique.join(
@@ -126,7 +130,7 @@ class DropDuplicates(Operator):
             pl_df_unique.select(*self._key)
         ]).unique(subset=self._key)
 
-        self._state_store.write_state(new_state)
+        self._state_store.write_state(new_state, "drop_duplicates")
 
         # return deduplicated dataframe
         return pl_df_deduplicated
