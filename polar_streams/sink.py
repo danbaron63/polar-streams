@@ -3,13 +3,15 @@ import polars as pl
 from uuid import uuid1
 from pathlib import Path
 from multiprocessing import Process
+from polar_streams.config import OutputMode, Config
 
 
 class Sink(ABC):
-    def __init__(self, options: dict[str, str], df):
-        self._options = options
+    def __init__(self, config: Config, df):
+        self._config = config
         self._df = df
         self._path = None
+        self._df.set_config(self._config)
 
     def save(self) -> "QueryManager":
         def pull_loop():
@@ -31,8 +33,8 @@ class ConsoleSink(Sink):
 
 
 class FileSink(Sink):
-    def __init__(self, options: dict[str, str], df, fmt: str, path: Path):
-        super().__init__(options, df)
+    def __init__(self, config: Config, df, fmt: str, path: Path):
+        super().__init__(config, df)
         self._path = path
         self._path.mkdir(parents=True, exist_ok=True)
         self._format = fmt
@@ -56,6 +58,7 @@ class SinkFactory:
         self._df = df
         self._options = dict()
         self._format = None
+        self._output_mode = None
 
     def option(self, key, value) -> "SinkFactory":
         self._options[key] = value
@@ -65,12 +68,23 @@ class SinkFactory:
         self._format = fmt
         return self
 
+    def output_mode(self, mode: str):
+        self._output_mode = OutputMode(mode)
+        return self
+
+    @property
+    def _config(self) -> Config:
+        return Config(
+            write_options=self._options,
+            output_mode=self._output_mode
+        )
+
     def save(self, path: None | str = None) -> "QueryManager":
         match self._format:
             case "console":
-                sink = ConsoleSink(self._options, self._df)
+                sink = ConsoleSink(self._config, self._df)
             case "csv" | "parquet" | "json":
-                sink = FileSink(self._options, self._df, self._format, Path(path))
+                sink = FileSink(self._config, self._df, self._format, Path(path))
             case _:
                 raise ValueError(f"{self._format} is not supported")
         return sink.save()

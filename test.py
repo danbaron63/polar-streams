@@ -27,11 +27,8 @@ df = (
 query = (
     df
     .write_stream()
+    .output_mode("complete")
     # .format("csv")
     # .save("out")
     .format("console").save()
 )
-
-time.sleep(2)
-
-query.stop()

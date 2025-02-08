@@ -1,16 +1,20 @@
 from abc import ABC, abstractmethod
+from polar_streams.config import Config, OutputMode
 from polar_streams.dataframe import DataFrame
 import polars as pl
 from multiprocessing import Queue
 from watchdog.events import FileSystemEvent, FileSystemEventHandler, EVENT_TYPE_CREATED
 from watchdog.observers import Observer
 from pathlib import Path
-from typing import Callable
 
 
 class Source(ABC):
     def __init__(self, options: dict[str, str]):
         self._options = options
+        self._config: Config | None = None
+
+    def set_config(self, config: Config):
+        self._config = config
 
     @abstractmethod
     def load(self, path: None | str) -> DataFrame:
@@ -22,12 +26,12 @@ class Source(ABC):
 
 
 class FileSource(Source):
-    def __init__(self, options: dict[str, str], format: str):
+    def __init__(self, options: dict[str, str], fmt: str):
         super().__init__(options)
         self._path = None
         self._options = options
-        self._format = format
-        match format:
+        self._format = fmt
+        match fmt:
             case "csv":
                 self._read_func = pl.scan_csv
             case "parquet":
@@ -66,6 +70,10 @@ class FileSource(Source):
         else:
             for pl_df in source_batches:
                 yield pl_df
+
+        # For complete output mode don't create source thread
+        if self._config.output_mode == OutputMode.COMPLETE:
+            return
 
         # search for new files and pass them along
         # using watchdog.

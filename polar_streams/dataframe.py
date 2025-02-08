@@ -1,5 +1,6 @@
 from polar_streams.sink import SinkFactory
 from polar_streams.statestore import StateStore
+from polar_streams.config import Config
 from abc import ABC, abstractmethod
 import polars as pl
 from polars.expr.expr import Expr
@@ -12,6 +13,7 @@ class DataFrame:
     def __init__(self, source):
         self._source = source
         self._operation = None
+        self._config = None
 
     def write_stream(self) -> SinkFactory:
         return SinkFactory(self)
@@ -22,6 +24,10 @@ class DataFrame:
                 yield self._operation.process(pl_df)
             else:
                 yield pl_df
+
+    def set_config(self, config: Config):
+        self._config = config
+        self._source.set_config(config)
 
     def with_columns(self, *cols: COL_TYPE):
         self._operation = AddColumns(list(cols))
