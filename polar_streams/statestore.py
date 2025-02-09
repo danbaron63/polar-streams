@@ -57,6 +57,6 @@ class StateStore:
     def wal_uncommitted_entries(self, table: str) -> list[str]:
         with closing(self._con.cursor()) as cur:
             res = cur.execute(f"SELECT MAX(wal_id) FROM wal_commits")
-            max_wal_id = res.fetchone()
+            max_wal_id = res.fetchone()[0]
             missing_entries = cur.execute(F"SELECT key FROM write_ahead_log WHERE id > {max_wal_id}")
             return [k[0] for k in missing_entries.fetchall()]
