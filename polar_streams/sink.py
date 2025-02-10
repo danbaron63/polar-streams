@@ -14,7 +14,6 @@ class Sink(ABC):
         self._df.set_config(self._config)
         self._wal = StateStore("state")
 
-
     def save(self) -> "QueryManager":
         def pull_loop():
             for microbatch in self._df.process():
@@ -78,10 +77,7 @@ class SinkFactory:
 
     @property
     def _config(self) -> Config:
-        return Config(
-            write_options=self._options,
-            output_mode=self._output_mode
-        )
+        return Config(write_options=self._options, output_mode=self._output_mode)
 
     def save(self, path: None | str = None) -> "QueryManager":
         match self._format:

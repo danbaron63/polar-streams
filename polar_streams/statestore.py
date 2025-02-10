@@ -35,19 +35,21 @@ class StateStore:
 
     def state_exists(self, table_name: str) -> bool:
         with closing(self._con.cursor()) as cur:
-            res = cur.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';")
+            res = cur.execute(
+                f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';"
+            )
             return bool(res.fetchone())
 
     def get_state(self, table_name: str) -> pl.LazyFrame:
         return pl.read_database_uri(
-            query=f"SELECT * FROM {table_name}",
-            uri=self._uri,
-            engine="adbc"
+            query=f"SELECT * FROM {table_name}", uri=self._uri, engine="adbc"
         ).lazy()
 
     def wal_append(self, key: str) -> int:
         with closing(self._con.cursor()) as cur:
-            res = cur.execute(f"INSERT INTO write_ahead_log (key) VALUES ('{key}') RETURNING id;")
+            res = cur.execute(
+                f"INSERT INTO write_ahead_log (key) VALUES ('{key}') RETURNING id;"
+            )
             return res.fetchone()[0]
 
     def wal_commit(self, table: str, wal_id: int):
@@ -58,5 +60,7 @@ class StateStore:
         with closing(self._con.cursor()) as cur:
             res = cur.execute(f"SELECT MAX(wal_id) FROM wal_commits")
             max_wal_id = res.fetchone()[0]
-            missing_entries = cur.execute(F"SELECT key FROM write_ahead_log WHERE id > {max_wal_id}")
+            missing_entries = cur.execute(
+                f"SELECT key FROM write_ahead_log WHERE id > {max_wal_id}"
+            )
             return [k[0] for k in missing_entries.fetchall()]

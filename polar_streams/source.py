@@ -73,13 +73,23 @@ class FileSource(Source):
         if run_initial_batch:
             yield MicroBatch(
                 pl_df=pl.concat(pl.collect_all(list(source_batches))).lazy(),
-                metadata=Metadata(source_files=source_files, wal_ids=list(wal_ids), start_time=datetime.now())
+                metadata=Metadata(
+                    source_files=source_files,
+                    wal_ids=list(wal_ids),
+                    start_time=datetime.now(),
+                ),
             )
         else:
-            for pl_df, source_file, wal_id in zip(source_batches, source_files, wal_ids):
+            for pl_df, source_file, wal_id in zip(
+                source_batches, source_files, wal_ids
+            ):
                 yield MicroBatch(
                     pl_df=pl_df,
-                    metadata=Metadata(source_files=[source_file], wal_ids=[wal_id], start_time=datetime.now())
+                    metadata=Metadata(
+                        source_files=[source_file],
+                        wal_ids=[wal_id],
+                        start_time=datetime.now(),
+                    ),
                 )
 
         # For complete output mode don't create source thread
@@ -101,7 +111,11 @@ class FileSource(Source):
                 # TODO: schema check
                 yield MicroBatch(
                     pl_df=pl_df,
-                    metadata=Metadata(source_files=[event.src_path], wal_ids=[wal_id], start_time=datetime.now())
+                    metadata=Metadata(
+                        source_files=[event.src_path],
+                        wal_ids=[wal_id],
+                        start_time=datetime.now(),
+                    ),
                 )
         finally:
             observer.stop()

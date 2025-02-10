@@ -71,13 +71,20 @@ class GroupedDataFrame(DataFrame):
             if not self._state_store.state_exists("group_by"):
                 new_state = microbatch.pl_df.select(*self._group_cols, *self._agg_cols)
             else:
-                new_state = pl.concat([microbatch.pl_df.select(*self._group_cols, *self._agg_cols), self._state_store.get_state("group_by")])
+                new_state = pl.concat(
+                    [
+                        microbatch.pl_df.select(*self._group_cols, *self._agg_cols),
+                        self._state_store.get_state("group_by"),
+                    ]
+                )
 
             # Update state
             self._state_store.write_state(new_state, "group_by")
 
             # Yield aggregated result
-            yield microbatch.new(new_state.group_by(self._group_cols).agg(self._agg_cols).lazy())
+            yield microbatch.new(
+                new_state.group_by(self._group_cols).agg(self._agg_cols).lazy()
+            )
 
 
 class Operator(ABC):
@@ -118,7 +125,9 @@ class DropDuplicates(Operator):
     def process(self, microbatch: MicroBatch) -> MicroBatch:
         if not self._state_store.state_exists("drop_duplicates"):
             # initialise state
-            self._state_store.write_state(microbatch.pl_df.select(*self._key).unique(), "drop_duplicates")
+            self._state_store.write_state(
+                microbatch.pl_df.select(*self._key).unique(), "drop_duplicates"
+            )
             return microbatch.new(microbatch.pl_df.unique(subset=self._key))
 
         # deduplicate incoming batch
@@ -133,10 +142,9 @@ class DropDuplicates(Operator):
         )
 
         # update state
-        new_state = pl.concat([
-            state,
-            pl_df_unique.select(*self._key)
-        ]).unique(subset=self._key)
+        new_state = pl.concat([state, pl_df_unique.select(*self._key)]).unique(
+            subset=self._key
+        )
 
         self._state_store.write_state(new_state, "drop_duplicates")
 
