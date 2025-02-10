@@ -57,12 +57,12 @@ class DataFrame:
 class GroupedDataFrame(DataFrame):
     def __init__(self, source, group_cols: list[COL_TYPE]):
         super().__init__(source)
-        self._agg_cols = None
+        self._agg_cols: list[COL_TYPE] = []
         self._group_cols = group_cols
         self._state_store = StateStore("state")
 
     def agg(self, *cols: list[COL_TYPE]):
-        self._agg_cols = cols
+        self._agg_cols = list(cols)  # type: ignore
         return DataFrame(self)
 
     def process(self) -> Generator[MicroBatch, None, None]:
@@ -128,10 +128,10 @@ class DropDuplicates(Operator):
             self._state_store.write_state(
                 microbatch.pl_df.select(*self._key).unique(), "drop_duplicates"
             )
-            return microbatch.new(microbatch.pl_df.unique(subset=self._key))
+            return microbatch.new(microbatch.pl_df.unique(subset=self._key))  # type: ignore
 
         # deduplicate incoming batch
-        pl_df_unique = microbatch.pl_df.unique(subset=self._key)
+        pl_df_unique = microbatch.pl_df.unique(subset=self._key)  # type: ignore
         state = self._state_store.get_state("drop_duplicates")
 
         # filter out records based on state
@@ -143,7 +143,7 @@ class DropDuplicates(Operator):
 
         # update state
         new_state = pl.concat([state, pl_df_unique.select(*self._key)]).unique(
-            subset=self._key
+            subset=self._key  # type: ignore
         )
 
         self._state_store.write_state(new_state, "drop_duplicates")

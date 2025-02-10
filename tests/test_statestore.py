@@ -1,3 +1,4 @@
+# mypy: disable-error-code="no-untyped-def"
 from polar_streams.statestore import StateStore
 import pytest
 from tempfile import TemporaryDirectory

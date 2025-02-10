@@ -7,15 +7,14 @@ from polar_streams.statestore import StateStore
 
 
 class Sink(ABC):
-    def __init__(self, config: Config, df):
+    def __init__(self, config: Config, df) -> None:
         self._config = config
         self._df = df
-        self._path = None
         self._df.set_config(self._config)
         self._wal = StateStore("state")
 
     def save(self) -> "QueryManager":
-        def pull_loop():
+        def pull_loop() -> None:
             for microbatch in self._df.process():
                 self.write(microbatch)
 
@@ -61,7 +60,7 @@ class SinkFactory:
         self._df = df
         self._options = dict()
         self._format = None
-        self._output_mode = None
+        self._output_mode: OutputMode = OutputMode.APPEND
 
     def option(self, key, value) -> "SinkFactory":
         self._options[key] = value
@@ -80,10 +79,13 @@ class SinkFactory:
         return Config(write_options=self._options, output_mode=self._output_mode)
 
     def save(self, path: None | str = None) -> "QueryManager":
+        sink: Sink
         match self._format:
             case "console":
                 sink = ConsoleSink(self._config, self._df)
             case "csv" | "parquet" | "json":
+                if not path:
+                    raise ValueError(f"Expected a path for {self._format} format")
                 sink = FileSink(self._config, self._df, self._format, Path(path))
             case _:
                 raise ValueError(f"{self._format} is not supported")
@@ -94,6 +96,6 @@ class QueryManager:
     def __init__(self, query_process: Process):
         self._query_process = query_process
 
-    def stop(self):
+    def stop(self) -> None:
         self._query_process.terminate()
         self._query_process.join()

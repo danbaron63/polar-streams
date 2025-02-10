@@ -25,7 +25,7 @@ class StateStore:
             );
             """)
 
-    def write_state(self, pl_df: pl.LazyFrame, table_name: str):
+    def write_state(self, pl_df: pl.LazyFrame, table_name: str) -> None:
         pl_df.collect().write_database(
             table_name=table_name,
             connection=self._uri,
@@ -50,9 +50,9 @@ class StateStore:
             res = cur.execute(
                 f"INSERT INTO write_ahead_log (key) VALUES ('{key}') RETURNING id;"
             )
-            return res.fetchone()[0]
+            return int(res.fetchone()[0])
 
-    def wal_commit(self, table: str, wal_id: int):
+    def wal_commit(self, table: str, wal_id: int) -> None:
         with closing(self._con.cursor()) as cur:
             cur.execute(f"INSERT INTO wal_commits (wal_id) VALUES ({wal_id})")
 

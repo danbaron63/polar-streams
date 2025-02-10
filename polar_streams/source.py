@@ -17,7 +17,7 @@ class Source(ABC):
         self._config: Config | None = None
         self._wal = StateStore("state")
 
-    def set_config(self, config: Config):
+    def set_config(self, config: Config) -> None:
         self._config = config
 
     @abstractmethod
@@ -25,30 +25,30 @@ class Source(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def process(self):
+    def process(self) -> Generator[MicroBatch, None, None]:
         raise NotImplementedError
 
 
 class FileSource(Source):
     def __init__(self, options: dict[str, str], fmt: str):
         super().__init__(options)
-        self._path = None
+        self._path: None | Path = None
         self._options = options
         self._format = fmt
         match fmt:
             case "csv":
-                self._read_func = pl.scan_csv
+                self._read_func = pl.scan_csv  # type: ignore
             case "parquet":
-                self._read_func = pl.scan_parquet
+                self._read_func = pl.scan_parquet  # type: ignore
             case "ndjson":
-                self._read_func = pl.scan_ndjson
+                self._read_func = pl.scan_ndjson  # type: ignore
             case "json":
-                self._read_func = pl.read_json
+                self._read_func = pl.read_json  # type: ignore
 
     def _read_path(self, path: str) -> pl.LazyFrame:
         return self._read_func(path).lazy()
 
-    def load(self, path: str) -> DataFrame:
+    def load(self, path: None | str) -> DataFrame:
         if not path:
             raise ValueError("Expected a path when calling load()")
 
@@ -56,7 +56,7 @@ class FileSource(Source):
         df = DataFrame(self)
         return df
 
-    class MyEventHandler(FileSystemEventHandler):
+    class FileEventHandler(FileSystemEventHandler):
         def __init__(self, q: Queue):
             self._q = q
 
@@ -65,11 +65,16 @@ class FileSource(Source):
                 self._q.put(event)
 
     def process(self) -> Generator[MicroBatch, None, None]:
+        if not self._path:
+            raise ValueError("path cannot be of type None")
+        if not self._config:
+            raise ValueError("internal error, config has not been set")
+
         # batch process all files and then listen for new ones
         run_initial_batch = self._options.get("run_initial_batch", "true") == "true"
         source_files = [p for p in self._path.iterdir() if not p.is_dir()]
-        wal_ids = (self._wal.wal_append(p) for p in source_files)
-        source_batches = (self._read_path(p) for p in source_files)
+        wal_ids = (self._wal.wal_append(p.as_posix()) for p in source_files)
+        source_batches = (self._read_path(p.as_posix()) for p in source_files)
         if run_initial_batch:
             yield MicroBatch(
                 pl_df=pl.concat(pl.collect_all(list(source_batches))).lazy(),
@@ -97,10 +102,10 @@ class FileSource(Source):
             return
 
         # search for new files and pass them along using watchdog.
-        q = Queue()
-        event_handler = self.MyEventHandler(q)
+        q: Queue = Queue()
+        event_handler = self.FileEventHandler(q)
         observer = Observer()
-        observer.schedule(event_handler, self._path, recursive=True)
+        observer.schedule(event_handler, self._path.as_posix(), recursive=True)
         observer.start()
 
         try:
@@ -123,9 +128,9 @@ class FileSource(Source):
 
 
 class SourceFactory:
-    def __init__(self):
-        self._options = dict()
-        self._format = None
+    def __init__(self) -> None:
+        self._options: dict[str, str] = dict()
+        self._format: str = ""
 
     def option(self, key: str, value: str) -> "SourceFactory":
         self._options[key] = value
