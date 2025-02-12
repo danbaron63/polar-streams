@@ -1,7 +1,9 @@
 # mypy: disable-error-code="no-untyped-def"
-from polar_streams.model import MicroBatch, Metadata
 from datetime import datetime
+
 import polars as pl
+
+from polar_streams.model import Metadata, MicroBatch
 
 
 def test_microbatch_new():

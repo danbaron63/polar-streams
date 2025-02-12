@@ -1,14 +1,16 @@
 from abc import ABC, abstractmethod
-from polar_streams.model import Config, OutputMode, Metadata, MicroBatch
-from polar_streams.dataframe import DataFrame
-from polar_streams.statestore import StateStore
-import polars as pl
+from datetime import datetime
 from multiprocessing import Queue
-from watchdog.events import FileSystemEvent, FileSystemEventHandler, EVENT_TYPE_CREATED
-from watchdog.observers import Observer
 from pathlib import Path
 from typing import Generator
-from datetime import datetime
+
+import polars as pl
+from watchdog.events import EVENT_TYPE_CREATED, FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
+
+from polar_streams.dataframe import DataFrame
+from polar_streams.model import Config, Metadata, MicroBatch, OutputMode
+from polar_streams.statestore import StateStore
 
 
 class Source(ABC):

@@ -1,6 +1,9 @@
 lint:
 	uv run ruff format .
 
+isort:
+	uv run isort .
+
 check-lint:
 	uv run ruff format --check
 
@@ -10,4 +13,6 @@ type:
 test:
 	uv run pytest tests
 
-checks: test type check-lint
+check: test type check-lint
+
+format: isort lint

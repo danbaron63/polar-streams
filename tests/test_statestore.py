@@ -1,8 +1,10 @@
 # mypy: disable-error-code="no-untyped-def"
-from polar_streams.statestore import StateStore
-import pytest
 from tempfile import TemporaryDirectory
+
 import polars as pl
+import pytest
+
+from polar_streams.statestore import StateStore
 
 
 @pytest.fixture(scope="session")

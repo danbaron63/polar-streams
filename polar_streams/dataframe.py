@@ -1,12 +1,12 @@
-from polar_streams.sink import SinkFactory
-from polar_streams.statestore import StateStore
-from polar_streams.model import Config
 from abc import ABC, abstractmethod
+from typing import Generator
+
 import polars as pl
 from polars.expr.expr import Expr
-from typing import Generator
-from polar_streams.model import MicroBatch
 
+from polar_streams.model import Config, MicroBatch
+from polar_streams.sink import SinkFactory
+from polar_streams.statestore import StateStore
 
 COL_TYPE = Expr | str
 

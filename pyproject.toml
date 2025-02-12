@@ -16,7 +16,11 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "isort>=6.0.0",
     "mypy>=1.15.0",
     "pytest>=8.3.4",
     "ruff>=0.9.6",
 ]
+
+[tool.isort]
+profile = "black"

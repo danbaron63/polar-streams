@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from uuid import uuid1
-from pathlib import Path
 from multiprocessing import Process
-from polar_streams.model import OutputMode, Config, MicroBatch
+from pathlib import Path
+from uuid import uuid1
+
+from polar_streams.model import Config, MicroBatch, OutputMode
 from polar_streams.statestore import StateStore
 
 

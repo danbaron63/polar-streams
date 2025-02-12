@@ -1,7 +1,8 @@
-from polar_streams import polars
-import polars as pl
 import time
 
+import polars as pl
+
+from polar_streams import polars
 
 df = (
     polars.read_stream()

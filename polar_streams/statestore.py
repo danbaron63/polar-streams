@@ -1,7 +1,8 @@
-import polars as pl
 import sqlite3
-from pathlib import Path
 from contextlib import closing
+from pathlib import Path
+
+import polars as pl
 
 
 class StateStore:

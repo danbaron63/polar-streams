@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-from enum import Enum
-import polars as pl
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
+
+import polars as pl
 
 
 class OutputMode(Enum):
