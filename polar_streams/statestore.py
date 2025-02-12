@@ -8,7 +8,7 @@ from polar_streams.util import log
 
 
 class StateStore:
-    def __init__(self, state_dir: str = "state"):
+    def __init__(self, state_dir):
         self._state_dir = Path(state_dir)
         self._state_dir.mkdir(exist_ok=True, parents=True)
         self._path = self._state_dir / "state.db"
@@ -60,12 +60,12 @@ class StateStore:
             return int(res.fetchone()[0])
 
     @log()
-    def wal_commit(self, table: str, wal_id: int) -> None:
+    def wal_commit(self, wal_id: int) -> None:
         with closing(self._con.cursor()) as cur:
             cur.execute(f"INSERT INTO wal_commits (wal_id) VALUES ({wal_id})")
 
     @log()
-    def wal_uncommitted_entries(self, table: str) -> list[str]:
+    def wal_uncommitted_entries(self) -> list[str]:
         with closing(self._con.cursor()) as cur:
             res = cur.execute(f"SELECT MAX(wal_id) FROM wal_commits")
             max_wal_id = res.fetchone()[0]

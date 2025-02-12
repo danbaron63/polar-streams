@@ -25,6 +25,7 @@ df = (
 query = (
     df.write_stream()
     .output_mode("complete")
+    .option("checkpointLocation", "state-test")
     # .format("csv")
     # .save("out")
     .format("console")

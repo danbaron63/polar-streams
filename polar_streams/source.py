@@ -12,7 +12,7 @@ from watchdog.observers import Observer
 from polar_streams.dataframe import DataFrame
 from polar_streams.model import Config, Metadata, MicroBatch, OutputMode
 from polar_streams.statestore import StateStore
-from polar_streams.util import log, staticlog
+from polar_streams.util import log
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +20,13 @@ logger = logging.getLogger(__name__)
 class Source(ABC):
     def __init__(self, options: dict[str, str]):
         self._options = options
-        self._config: Config | None = None
-        self._wal = StateStore("state")
-
-    @log()
-    def set_config(self, config: Config) -> None:
-        self._config = config
 
     @abstractmethod
     def load(self, path: None | str) -> DataFrame:
         raise NotImplementedError
 
     @abstractmethod
-    def process(self) -> Generator[MicroBatch, None, None]:
+    def process(self, state_store: StateStore) -> Generator[MicroBatch, None, None]:
         raise NotImplementedError
 
 
@@ -73,16 +67,16 @@ class FileSource(Source):
                 self._q.put(event)
 
     @log()
-    def process(self) -> Generator[MicroBatch, None, None]:
+    def process(
+        self, state_store: StateStore, config: Config
+    ) -> Generator[MicroBatch, None, None]:
         if not self._path:
             raise ValueError("path cannot be of type None")
-        if not self._config:
-            raise ValueError("internal error, config has not been set")
 
         # batch process all files and then listen for new ones
         run_initial_batch = self._options.get("run_initial_batch", "true") == "true"
         source_files = [p for p in self._path.iterdir() if not p.is_dir()]
-        wal_ids = (self._wal.wal_append(p.as_posix()) for p in source_files)
+        wal_ids = (state_store.wal_append(p.as_posix()) for p in source_files)
         source_batches = (self._read_path(p.as_posix()) for p in source_files)
         if run_initial_batch:
             yield MicroBatch(
@@ -107,7 +101,7 @@ class FileSource(Source):
                 )
 
         # For complete output mode don't create source thread
-        if self._config.output_mode == OutputMode.COMPLETE:
+        if config.output_mode == OutputMode.COMPLETE:
             return
 
         # search for new files and pass them along using watchdog.
@@ -120,7 +114,7 @@ class FileSource(Source):
         try:
             while True:
                 event = q.get()
-                wal_id = self._wal.wal_append(event.src_path)
+                wal_id = state_store.wal_append(event.src_path)
                 pl_df = self._read_path(event.src_path)
                 # TODO: schema check
                 yield MicroBatch(

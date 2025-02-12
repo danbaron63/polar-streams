@@ -3,10 +3,12 @@ from tempfile import TemporaryDirectory
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 from pytest import fixture
 
 from polar_streams.model import Config, OutputMode
 from polar_streams.source import FileSource
+from polar_streams.statestore import StateStore
 
 
 @fixture
@@ -33,21 +35,23 @@ def test_path_set(csv_source):
 
 def test_batch_source(csv_source):
     with TemporaryDirectory() as temp_dir:
-        csv_source._path = Path(temp_dir)
-        csv_source.set_config(Config(dict(), OutputMode.COMPLETE))
-        df1 = pl.DataFrame({"col1": [1, 2, 3], "col2": [4, 5, 6]})
-        df2 = pl.DataFrame({"col1": [7, 8, 9], "col2": [10, 11, 12]})
+        with TemporaryDirectory() as state_dir:
+            csv_source._path = Path(temp_dir)
+            config = Config(dict(), OutputMode.COMPLETE)
+            df1 = pl.DataFrame({"col1": [1, 2, 3], "col2": [4, 5, 6]})
+            df2 = pl.DataFrame({"col1": [7, 8, 9], "col2": [10, 11, 12]})
 
-        df1.write_csv(Path(temp_dir) / "source-1.csv")
-        df2.write_csv(Path(temp_dir) / "source-2.csv")
+            df1.write_csv(Path(temp_dir) / "source-1.csv")
+            df2.write_csv(Path(temp_dir) / "source-2.csv")
 
-        out_df = next(csv_source.process())
+            out_df = next(csv_source.process(StateStore(state_dir), config))
 
-        assert out_df.pl_df.collect().equals(
-            pl.DataFrame(
-                {
-                    "col1": [1, 2, 3, 7, 8, 9],
-                    "col2": [4, 5, 6, 10, 11, 12],
-                }
+            assert_frame_equal(
+                out_df.pl_df.collect(),
+                pl.DataFrame(
+                    {
+                        "col1": [1, 2, 3, 7, 8, 9],
+                        "col2": [4, 5, 6, 10, 11, 12],
+                    }
+                ),
             )
-        )

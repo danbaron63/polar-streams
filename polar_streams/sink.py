@@ -5,20 +5,21 @@ from uuid import uuid1
 
 from polar_streams.model import Config, MicroBatch, OutputMode
 from polar_streams.statestore import StateStore
-from polar_streams.util import log, staticlog
+from polar_streams.util import log
 
 
 class Sink(ABC):
     def __init__(self, config: Config, df) -> None:
         self._config = config
         self._df = df
-        self._df.set_config(self._config)
-        self._wal = StateStore("state")
+        self._state_store: StateStore = StateStore(
+            self._config.write_options["checkpointLocation"]
+        )
 
     @log()
     def save(self) -> "QueryManager":
         def pull_loop() -> None:
-            for microbatch in self._df.process():
+            for microbatch in self._df.process(self._state_store, self._config):
                 self.write(microbatch)
 
         p = Process(target=pull_loop)
@@ -35,7 +36,7 @@ class ConsoleSink(Sink):
     def write(self, microbatch: MicroBatch):
         print(microbatch.pl_df.lazy().collect())
         for wal_id in microbatch.metadata.wal_ids:
-            self._wal.wal_commit("", wal_id)
+            self._state_store.wal_commit(wal_id)
 
 
 class FileSink(Sink):
@@ -85,7 +86,10 @@ class SinkFactory:
     @property
     @log()
     def _config(self) -> Config:
-        return Config(write_options=self._options, output_mode=self._output_mode)
+        return Config(
+            write_options=self._options,
+            output_mode=self._output_mode,
+        )
 
     @log()
     def save(self, path: None | str = None) -> "QueryManager":

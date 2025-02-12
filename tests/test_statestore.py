@@ -59,14 +59,13 @@ def test_wal_append(state_store):
 
 def test_wal_commit(state_store):
     # Given
-    table = "test"
     id_1 = 1
     id_2 = 2
     cur = state_store._con.cursor()
 
     # When
-    state_store.wal_commit(table, id_1)
-    state_store.wal_commit(table, id_2)
+    state_store.wal_commit(id_1)
+    state_store.wal_commit(id_2)
 
     # Then
     result = cur.execute("SELECT * FROM wal_commits ORDER BY wal_id ASC;").fetchall()
@@ -79,7 +78,6 @@ def test_wal_commit(state_store):
 
 def test_wal_uncommited_entries(state_store):
     # Given
-    table = "test"
     key_1 = "test-key-1"
     key_2 = "test-key-2"
     key_3 = "test-key-3"
@@ -90,9 +88,9 @@ def test_wal_uncommited_entries(state_store):
     id_2 = state_store.wal_append(key_2)
     state_store.wal_append(key_3)
     state_store.wal_append(key_4)
-    state_store.wal_commit(table, id_1)
-    state_store.wal_commit(table, id_2)
-    result = state_store.wal_uncommitted_entries(table)
+    state_store.wal_commit(id_1)
+    state_store.wal_commit(id_2)
+    result = state_store.wal_uncommitted_entries()
 
     # Then
     assert result == [
