@@ -34,15 +34,15 @@ def test_path_set(csv_source):
 
 
 def test_batch_source(csv_source):
-    with TemporaryDirectory() as temp_dir:
+    with TemporaryDirectory() as source_dir:
         with TemporaryDirectory() as state_dir:
-            csv_source._path = Path(temp_dir)
+            csv_source._path = Path(source_dir)
             config = Config(dict(), OutputMode.COMPLETE)
             df1 = pl.DataFrame({"col1": [1, 2, 3], "col2": [4, 5, 6]})
             df2 = pl.DataFrame({"col1": [7, 8, 9], "col2": [10, 11, 12]})
 
-            df1.write_csv(Path(temp_dir) / "source-1.csv")
-            df2.write_csv(Path(temp_dir) / "source-2.csv")
+            df1.write_csv(Path(source_dir) / "source-1.csv")
+            df2.write_csv(Path(source_dir) / "source-2.csv")
 
             out_df = next(csv_source.process(StateStore(state_dir), config))
 
@@ -55,3 +55,27 @@ def test_batch_source(csv_source):
                     }
                 ),
             )
+
+
+def test_source_without_run_initial_batch(csv_source):
+    with TemporaryDirectory() as source_dir:
+        with TemporaryDirectory() as state_dir:
+            config = Config(write_options=dict(), output_mode=OutputMode.COMPLETE)
+            state_store = StateStore(state_dir)
+            csv_source._path = Path(source_dir)
+            csv_source._options = dict(run_initial_batch="false")
+            df1 = pl.DataFrame({"col1": [1, 2, 3], "col2": [4, 5, 6]})
+            df2 = pl.DataFrame({"col1": [7, 8, 9], "col2": [10, 11, 12]})
+
+            df1.write_csv(Path(source_dir) / "source-1.csv")
+            df2.write_csv(Path(source_dir) / "source-2.csv")
+
+            process_gen = csv_source.process(state_store, config)
+            out_df_1 = next(process_gen)
+            out_df_2 = next(process_gen)
+            print(out_df_1.pl_df.collect())
+            assert_frame_equal(out_df_1.pl_df.collect(), df1)
+            assert_frame_equal(out_df_2.pl_df.collect(), df2)
+
+            with pytest.raises(StopIteration):
+                next(process_gen)
