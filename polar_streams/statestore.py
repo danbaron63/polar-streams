@@ -4,6 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
+from polar_streams.util import log
+
 
 class StateStore:
     def __init__(self, state_dir: str = "state"):
@@ -26,6 +28,7 @@ class StateStore:
             );
             """)
 
+    @log()
     def write_state(self, pl_df: pl.LazyFrame, table_name: str) -> None:
         pl_df.collect().write_database(
             table_name=table_name,
@@ -34,6 +37,7 @@ class StateStore:
             if_table_exists="replace",
         )
 
+    @log()
     def state_exists(self, table_name: str) -> bool:
         with closing(self._con.cursor()) as cur:
             res = cur.execute(
@@ -41,11 +45,13 @@ class StateStore:
             )
             return bool(res.fetchone())
 
+    @log()
     def get_state(self, table_name: str) -> pl.LazyFrame:
         return pl.read_database_uri(
             query=f"SELECT * FROM {table_name}", uri=self._uri, engine="adbc"
         ).lazy()
 
+    @log()
     def wal_append(self, key: str) -> int:
         with closing(self._con.cursor()) as cur:
             res = cur.execute(
@@ -53,10 +59,12 @@ class StateStore:
             )
             return int(res.fetchone()[0])
 
+    @log()
     def wal_commit(self, table: str, wal_id: int) -> None:
         with closing(self._con.cursor()) as cur:
             cur.execute(f"INSERT INTO wal_commits (wal_id) VALUES ({wal_id})")
 
+    @log()
     def wal_uncommitted_entries(self, table: str) -> list[str]:
         with closing(self._con.cursor()) as cur:
             res = cur.execute(f"SELECT MAX(wal_id) FROM wal_commits")

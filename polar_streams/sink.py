@@ -5,6 +5,7 @@ from uuid import uuid1
 
 from polar_streams.model import Config, MicroBatch, OutputMode
 from polar_streams.statestore import StateStore
+from polar_streams.util import log, staticlog
 
 
 class Sink(ABC):
@@ -14,6 +15,7 @@ class Sink(ABC):
         self._df.set_config(self._config)
         self._wal = StateStore("state")
 
+    @log()
     def save(self) -> "QueryManager":
         def pull_loop() -> None:
             for microbatch in self._df.process():
@@ -29,6 +31,7 @@ class Sink(ABC):
 
 
 class ConsoleSink(Sink):
+    @log()
     def write(self, microbatch: MicroBatch):
         print(microbatch.pl_df.lazy().collect())
         for wal_id in microbatch.metadata.wal_ids:
@@ -42,6 +45,7 @@ class FileSink(Sink):
         self._path.mkdir(parents=True, exist_ok=True)
         self._format = fmt
 
+    @log()
     def write(self, microbatch: MicroBatch):
         # TODO: Consider using a monotonic counter if ordering of files is important
         path = self._path / f"{uuid1()}.{self._format}"
@@ -63,22 +67,27 @@ class SinkFactory:
         self._format = None
         self._output_mode: OutputMode = OutputMode.APPEND
 
+    @log()
     def option(self, key, value) -> "SinkFactory":
         self._options[key] = value
         return self
 
+    @log()
     def format(self, fmt) -> "SinkFactory":
         self._format = fmt
         return self
 
+    @log()
     def output_mode(self, mode: str):
         self._output_mode = OutputMode(mode)
         return self
 
     @property
+    @log()
     def _config(self) -> Config:
         return Config(write_options=self._options, output_mode=self._output_mode)
 
+    @log()
     def save(self, path: None | str = None) -> "QueryManager":
         sink: Sink
         match self._format:
@@ -97,6 +106,7 @@ class QueryManager:
     def __init__(self, query_process: Process):
         self._query_process = query_process
 
+    @log()
     def stop(self) -> None:
         self._query_process.terminate()
         self._query_process.join()

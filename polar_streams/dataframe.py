@@ -7,6 +7,7 @@ from polars.expr.expr import Expr
 from polar_streams.model import Config, MicroBatch
 from polar_streams.sink import SinkFactory
 from polar_streams.statestore import StateStore
+from polar_streams.util import log, staticlog
 
 COL_TYPE = Expr | str
 
@@ -17,9 +18,11 @@ class DataFrame:
         self._operation = None
         self._config = None
 
+    @log()
     def write_stream(self) -> SinkFactory:
         return SinkFactory(self)
 
+    @log()
     def process(self) -> Generator[MicroBatch, None, None]:
         for microbatch in self._source.process():
             if self._operation:
@@ -27,28 +30,35 @@ class DataFrame:
             else:
                 yield microbatch
 
+    @log()
     def set_config(self, config: Config):
         self._config = config
         self._source.set_config(config)
 
+    @log()
     def with_columns(self, *cols: COL_TYPE):
         self._operation = AddColumns(list(cols))
         return DataFrame(self)
 
+    @log()
     def with_column(self, col: COL_TYPE):
         return self.with_columns(col)
 
+    @log()
     def select(self, *cols: COL_TYPE):
         self._operation = Select(list(cols))
         return DataFrame(self)
 
+    @log()
     def group_by(self, *cols):
         return GroupedDataFrame(self, list(cols))
 
+    @log()
     def filter(self, predicate: Expr | bool):
         self._operation = Filter(predicate)
         return DataFrame(self)
 
+    @log()
     def drop_duplicates(self, *key):
         self._operation = DropDuplicates(list(key))
         return DataFrame(self)
@@ -61,10 +71,12 @@ class GroupedDataFrame(DataFrame):
         self._group_cols = group_cols
         self._state_store = StateStore("state")
 
+    @log()
     def agg(self, *cols: list[COL_TYPE]):
         self._agg_cols = list(cols)  # type: ignore
         return DataFrame(self)
 
+    @log()
     def process(self) -> Generator[MicroBatch, None, None]:
         for microbatch in self._source.process():
             # Fetch state if exists, otherwise initialise with current batch
@@ -97,6 +109,7 @@ class AddColumns(Operator):
     def __init__(self, cols: list[COL_TYPE]):
         self._cols = cols
 
+    @log()
     def process(self, microbatch: MicroBatch) -> MicroBatch:
         return microbatch.new(microbatch.pl_df.with_columns(self._cols))
 
@@ -105,6 +118,7 @@ class Select(Operator):
     def __init__(self, cols: list[COL_TYPE]):
         self._cols = cols
 
+    @log()
     def process(self, microbatch: MicroBatch) -> MicroBatch:
         return microbatch.new(microbatch.pl_df.select(self._cols))
 
@@ -113,6 +127,7 @@ class Filter(Operator):
     def __init__(self, predicate: Expr | bool):
         self._predicate = predicate
 
+    @log()
     def process(self, microbatch: MicroBatch) -> MicroBatch:
         return microbatch.new(microbatch.pl_df.filter(self._predicate))
 
@@ -122,6 +137,7 @@ class DropDuplicates(Operator):
         self._key = key
         self._state_store = StateStore()
 
+    @log()
     def process(self, microbatch: MicroBatch) -> MicroBatch:
         if not self._state_store.state_exists("drop_duplicates"):
             # initialise state

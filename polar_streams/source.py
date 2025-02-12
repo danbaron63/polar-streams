@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from multiprocessing import Queue
@@ -11,6 +12,9 @@ from watchdog.observers import Observer
 from polar_streams.dataframe import DataFrame
 from polar_streams.model import Config, Metadata, MicroBatch, OutputMode
 from polar_streams.statestore import StateStore
+from polar_streams.util import log, staticlog
+
+logger = logging.getLogger(__name__)
 
 
 class Source(ABC):
@@ -19,6 +23,7 @@ class Source(ABC):
         self._config: Config | None = None
         self._wal = StateStore("state")
 
+    @log()
     def set_config(self, config: Config) -> None:
         self._config = config
 
@@ -50,6 +55,7 @@ class FileSource(Source):
     def _read_path(self, path: str) -> pl.LazyFrame:
         return self._read_func(path).lazy()
 
+    @log()
     def load(self, path: None | str) -> DataFrame:
         if not path:
             raise ValueError("Expected a path when calling load()")
@@ -66,6 +72,7 @@ class FileSource(Source):
             if event.event_type == EVENT_TYPE_CREATED:
                 self._q.put(event)
 
+    @log()
     def process(self) -> Generator[MicroBatch, None, None]:
         if not self._path:
             raise ValueError("path cannot be of type None")
@@ -134,14 +141,17 @@ class SourceFactory:
         self._options: dict[str, str] = dict()
         self._format: str = ""
 
+    @log()
     def option(self, key: str, value: str) -> "SourceFactory":
         self._options[key] = value
         return self
 
+    @log()
     def format(self, fmt: str) -> "SourceFactory":
         self._format = fmt
         return self
 
+    @log()
     def load(self, path: None | str = None) -> DataFrame:
         match self._format:
             case "csv" | "parquet" | "json" | "ndjson":
