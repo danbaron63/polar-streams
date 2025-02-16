@@ -79,12 +79,11 @@ class GroupedDataFrame(DataFrame):
     ) -> Generator[MicroBatch, None, None]:
         for microbatch in self._source.process(state_store, config):
             # Fetch state if exists, otherwise initialise with current batch
-            if not state_store.state_exists("group_by"):
-                new_state = microbatch.pl_df.select(*self._group_cols, *self._agg_cols)
-            else:
+            new_state = microbatch.pl_df
+            if state_store.state_exists("group_by"):
                 new_state = pl.concat(
                     [
-                        microbatch.pl_df.select(*self._group_cols, *self._agg_cols),
+                        new_state,
                         state_store.get_state("group_by"),
                     ]
                 )
