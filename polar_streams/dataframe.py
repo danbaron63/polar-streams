@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import Generator
 
@@ -9,6 +10,7 @@ from polar_streams.sink import SinkFactory
 from polar_streams.statestore import StateStore
 from polar_streams.util import log
 
+logger = logging.getLogger(__name__)
 COL_TYPE = Expr | str
 
 
