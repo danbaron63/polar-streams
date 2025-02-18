@@ -6,7 +6,7 @@ from polars.testing import assert_frame_equal
 from pytest import fixture
 
 from polar_streams.dataframe import DataFrame
-from polar_streams.model import Config, MicroBatch
+from polar_streams.model import Config, MicroBatch, OutputMode
 from polar_streams.statestore import StateStore
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,22 @@ def duplicate_df():
     return DataFrame(source_df)
 
 
+@fixture
+def append_config():
+    return Config(
+        output_mode=OutputMode.APPEND,
+        write_options=dict(),
+    )
+
+
+@fixture
+def update_config():
+    return Config(
+        output_mode=OutputMode.UPDATE,
+        write_options=dict(),
+    )
+
+
 def test_with_columns(source_df):
     result_df = source_df.with_columns((pl.col("col1") * 3).alias("col3"))
 
@@ -96,19 +112,40 @@ def test_select(source_df):
     assert_frame_equal(dfs[1], pl.DataFrame({"col1": [7, 8, 9], "col3": [8, 9, 10]}))
 
 
-def test_group_by(duplicate_df, state_store):
+def test_group_by(duplicate_df, state_store, append_config):
+    # When
     result_df = duplicate_df.group_by("id").agg(pl.col("col2").sum())
-
     dfs = [
         mb.pl_df.collect()
-        for mb in result_df.process(state_store=state_store, config=None)
+        for mb in result_df.process(state_store=state_store, config=append_config)
     ]
+
+    # Then
     assert_frame_equal(
         dfs[0], pl.DataFrame({"id": [1, 2], "col2": [4, 10]}), check_row_order=False
     )
     assert_frame_equal(
         dfs[1],
         pl.DataFrame({"id": [1, 2, 8, 9], "col2": [4, 15, 11, 12]}),
+        check_row_order=False,
+    )
+
+
+def test_group_by_update(duplicate_df, state_store, update_config):
+    # When
+    result_df = duplicate_df.group_by("id").agg(pl.col("col2").sum())
+    dfs = [
+        mb.pl_df.collect()
+        for mb in result_df.process(state_store=state_store, config=update_config)
+    ]
+
+    # Then
+    assert_frame_equal(
+        dfs[0], pl.DataFrame({"id": [1, 2], "col2": [4, 10]}), check_row_order=False
+    )
+    assert_frame_equal(
+        dfs[1],
+        pl.DataFrame({"id": [2, 8, 9], "col2": [15, 11, 12]}),
         check_row_order=False,
     )
 

@@ -5,7 +5,7 @@ from typing import Generator
 import polars as pl
 from polars.expr.expr import Expr
 
-from polar_streams.model import Config, MicroBatch
+from polar_streams.model import Config, MicroBatch, OutputMode
 from polar_streams.sink import SinkFactory
 from polar_streams.statestore import StateStore
 from polar_streams.util import log
@@ -80,6 +80,8 @@ class GroupedDataFrame(DataFrame):
         for microbatch in self._source.process(state_store, config):
             # Fetch state if exists, otherwise initialise with current batch
             new_state = microbatch.pl_df
+            microbatch_keys = microbatch.pl_df.select(self._group_cols).unique()
+
             if state_store.state_exists("group_by"):
                 new_state = pl.concat(
                     [
@@ -91,10 +93,17 @@ class GroupedDataFrame(DataFrame):
             # Update state
             state_store.write_state(new_state, "group_by")
 
+            result = new_state.group_by(self._group_cols).agg(self._agg_cols).lazy()
+
+            # If update mode, remove unchanged records
+            if config.output_mode == OutputMode.UPDATE:
+                result = microbatch_keys.join(
+                    result, on=self._group_cols, how="left", coalesce=True
+                )
+            # TODO: implement watermark for late records when using OutputMode.APPEND
+
             # Yield aggregated result
-            yield microbatch.new(
-                new_state.group_by(self._group_cols).agg(self._agg_cols).lazy()
-            )
+            yield microbatch.new(result)
 
 
 class Operator(ABC):
